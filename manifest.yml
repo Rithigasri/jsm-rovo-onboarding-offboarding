@@ -4,19 +4,22 @@ modules:
       name: Employee Management
       description: An agent for testing user logging and employee adding.
       prompt: >
-        You are a helpful agent. You can log usernames or add employees.
-        - If a user asks to "add an employee", extract the `userId` and `username`, and call `add-employee`.
-        - If a user asks to "assign an asset", extract the `objectKey` and `employeeId`, and call `assign-asset`.
-        - If a user asks to "deallocate an asset", extract the `objectKey`, and call `deallocate-asset`.
-        - Sync asset attributes to Confluence by calling `sync-attributes-to-confluence`. No input is required.
-        - If a user asks to "delete an employee", extract the `emp_id`, and call `delete-employee`.
-        If required information is missing, ask the user to provide it.
+        You are a helpful agent. You can log usernames or add employees. 
+        - If a user asks to "add an employee", extract the `userId` and `username`, and call `add-employee`. 
+        - Once the user adds a employee successfully, ask them if they want to assign a asset for the employee added.
+        - If a user asks to "assign an asset", extract the `objectKey` and `employeeId`, and call `assign-asset`. 
+        - If a user asks to "deallocate an asset", extract the `objectKey`, and call `deallocate-asset`. 
+        - Sync asset attributes to Confluence by calling `sync-attributes-to-confluence`. No input is required. 
+        - If a user asks to "delete an employee", extract the `emp_id`, and call `delete-employee`. If required information is missing, ask the user to provide it. 
+        - If a user asks a question about assets or employees, call `query-knowledge-base`.
+        - Do not provide follow up questions, after responding in the form of conversation starters.
       conversationStarters:
         - Add a new employee
         - Assign an asset to an employee
         - Deallocate an asset
         - Sync asset attributes to Confluence
         - Delete an employee
+        - Ask a question about assets or employees
 
       actions:
         - add-employee
@@ -24,6 +27,7 @@ modules:
         - deallocate-asset
         - sync-attributes-to-confluence
         - delete-employee
+        - query-knowledge-base
 
   action:
     - key: add-employee
@@ -31,8 +35,8 @@ modules:
       function: addEmployee
       actionVerb: GET
       description: >
-        Logs an employee to Forge logs in format: userId,username.
-        Validates if the employee already exists using AQL before adding.
+        Logs an employee to Forge logs in format: userId,username. Validates if
+        the employee already exists using AQL before adding.
       inputs:
         userId:
           title: User ID
@@ -44,6 +48,19 @@ modules:
           type: string
           required: true
           description: Name of the employee
+    - key: query-knowledge-base
+      name: Query Knowledge Base
+      function: queryKnowledgeBase
+      actionVerb: GET
+      description: >
+        Queries the Confluence knowledge base for information related to assets
+        or employees.
+      inputs:
+        query:
+          title: Query
+          type: string
+          required: true
+          description: The question or query to search in the knowledge base.
     - key: assign-asset
       name: Assign Asset
       function: assignAsset
@@ -66,13 +83,15 @@ modules:
       function: syncToConfluence
       actionVerb: GET
       description: >
-        Fetches assets from Insight and syncs their attributes to a Confluence page.
+        Fetches assets from Insight and syncs their attributes to a Confluence
+        page.
     - key: delete-employee
       name: Delete Employee
       function: deleteEmployee
       actionVerb: GET
       description: >
-        Deletes an employee from the database and removes their object from the system.
+        Deletes an employee from the database and removes their object from the
+        system.
       inputs:
         emp_id:
           title: Employee ID
@@ -103,22 +122,24 @@ modules:
       handler: index.deleteEmployee
     - key: deallocateAsset
       handler: index.deallocateAsset
+    - key: queryKnowledgeBase
+      handler: index.queryKnowledgeBase
 
 permissions:
   scopes:
-    - 'read:confluence-content.summary'
-    - 'write:page:confluence'
-    - 'write:confluence-content'
-    - 'read:confluence-content.all'
-    - 'read:confluence-space.summary'
-    - 'write:page:confluence'
-    - 'read:jira-work'
-    - 'read:page:confluence'
+    - read:confluence-content.summary
+    - write:page:confluence
+    - write:confluence-content
+    - read:confluence-content.all
+    - read:confluence-space.summary
+    - read:jira-work
+    - read:page:confluence
   external:
     fetch:
       backend:
-        - 'https://api.atlassian.com'
-        - 'https://one-atlas-onki.atlassian.net'
+        - generativelanguage.googleapis.com
+        - https://api.atlassian.com
+        - https://one-atlas-onki.atlassian.net
 
 app:
   runtime:

@@ -717,3 +717,115 @@ export async function deleteEmployee(payload) {
     };
   }
 }
+
+// Function to query the knowledge base
+export async function queryKnowledgeBase(payload) {
+  console.log("Received payload for queryKnowledgeBase:", JSON.stringify(payload, null, 2));
+
+  const query = payload?.query;
+
+  if (typeof query !== "string" || query.trim() === "") {
+    console.error("❌ Invalid query parameter. Query must be a non-empty string.");
+    return {
+      status: "error",
+      message: "Invalid query. Please provide a valid question or search term.",
+    };
+  }
+
+  const confluencePageId = "27394050"; // ID of the Confluence page
+  const url = `${CONFLUENCE_BASE_URL}/content/${confluencePageId}?expand=body.storage`;
+
+  try {
+    console.log("🔄 Fetching content from the Confluence knowledge base...");
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("❌ Failed to fetch knowledge base content:", response.status, await response.text());
+      return {
+        status: "error",
+        message: "Failed to fetch knowledge base content.",
+      };
+    }
+
+    const data = await response.json();
+    const rawContent = data.body.storage.value; // HTML content of the page
+    console.log("✅ Successfully fetched knowledge base content.");
+    console.log("📄 Confluence Content (Raw):", rawContent);
+
+    // Decode HTML entities (e.g., &quot; -> ")
+    const decodeHtmlEntities = (str) => {
+      return str
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>');
+    };
+
+    const decodedContent = decodeHtmlEntities(rawContent.replace(/<\/?p>/g, "").trim());
+    console.log("📄 Confluence Content (Decoded):", decodedContent);
+
+    // Prepare the payload for the Gemini API with a refined prompt
+    const geminiPayload = {
+      contents: [
+        {
+          parts: [
+            {
+              text: `You are an intelligent assistant with access to a knowledge base. Use the provided knowledge base content to answer the user's question accurately. If the answer cannot be found in the knowledge base, respond with "The requested information is not available in the knowledge base."
+
+Knowledge Base Content:
+${decodedContent}
+
+Question: ${query}`,
+            },
+          ],
+        },
+      ],
+    };
+
+    console.log("📄 Question passed to Gemini API:", query);
+    console.log("📄 Payload sent to Gemini API:", JSON.stringify(geminiPayload, null, 2));
+
+    // Call the Gemini API
+    const geminiResponse = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB8XhOb7B67nb7N7gj4eMgiQikkqGC7WrE",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geminiPayload),
+      }
+    );
+
+    if (!geminiResponse.ok) {
+      console.error(
+        "❌ Failed to get response from Gemini API:",
+        geminiResponse.status,
+        await geminiResponse.text()
+      );
+      return {
+        status: "error",
+        message: "Failed to get a response from the Gemini API.",
+      };
+    }
+
+    const geminiData = await geminiResponse.json();
+    const geminiAnswer =
+      geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "No response from Gemini.";
+
+    console.log("✅ Successfully received response from Gemini API:", geminiAnswer);
+
+    return {
+      status: "success",
+      answer: geminiAnswer,
+    };
+  } catch (error) {
+    console.error("❌ Error in queryKnowledgeBase:", error);
+    return {
+      status: "error",
+      message: "An error occurred while querying the knowledge base.",
+    };
+  }
+}
