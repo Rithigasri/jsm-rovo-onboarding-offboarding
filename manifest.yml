@@ -6,8 +6,9 @@ modules:
       prompt: >
         You are a helpful agent. You can log usernames or add employees. 
         - If a user asks to "add an employee", extract the `userId` and `username`, and call `add-employee`. 
-        - Once the user adds a employee successfully, ask them if they want to assign a asset for the employee added.
-        - If a user asks to "assign an asset", extract the `objectKey` and `employeeId`, and call `assign-asset`. 
+        - Once the user adds a employee successfully, ask them if they want to assign a laptop/monitor for the employee added.
+        - As a follow up question based on users response after adding employee,  ask if they want to assign peripherals for the employee such as mouse/keyboard.
+        - If a user asks to "assign an asset", extract the `assetId` and `employeeId`, and call `assign-asset`. 
         - If a user asks to "deallocate an asset", extract the `objectKey`, and call `deallocate-asset`. 
         - Sync asset attributes to Confluence by calling `sync-attributes-to-confluence`. No input is required. 
         - If a user asks to "delete an employee", extract the `emp_id`, and call `delete-employee`. If required information is missing, ask the user to provide it. 
@@ -20,7 +21,6 @@ modules:
         - Sync asset attributes to Confluence
         - Delete an employee
         - Ask a question about assets or employees
-
       actions:
         - add-employee
         - assign-asset
@@ -28,15 +28,14 @@ modules:
         - sync-attributes-to-confluence
         - delete-employee
         - query-knowledge-base
-
   action:
     - key: add-employee
       name: Add Employee
       function: addEmployee
       actionVerb: GET
       description: >
-        Logs an employee to Forge logs in format: userId,username. Validates if
-        the employee already exists using AQL before adding.
+        Logs an employee to Forge logs in format: userId, username, email, phoneNumber, department.
+        Validates if the employee already exists using AQL before adding.
       inputs:
         userId:
           title: User ID
@@ -48,6 +47,21 @@ modules:
           type: string
           required: true
           description: Name of the employee
+        email:
+          title: Email
+          type: string
+          required: true
+          description: Email address of the employee
+        phoneNumber:
+          title: Phone Number
+          type: string
+          required: true
+          description: Phone number of the employee
+        department:
+          title: Department
+          type: string
+          required: true
+          description: Department of the employee
     - key: query-knowledge-base
       name: Query Knowledge Base
       function: queryKnowledgeBase
@@ -66,13 +80,13 @@ modules:
       function: assignAsset
       actionVerb: GET
       description: >
-        Logs the asset assignment in format: objectKey,employeeId
+        Logs the asset assignment in format: assetId,employeeId
       inputs:
-        objectKey:
-          title: Object Key
+        assetId:
+          title: Asset Id
           type: string
           required: true
-          description: Key of the asset to be assigned
+          description: Asset Id of the asset to be assigned
         employeeId:
           title: Employee ID
           type: string
@@ -137,7 +151,7 @@ permissions:
   external:
     fetch:
       backend:
-        - generativelanguage.googleapis.com
+        - https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB8XhOb7B67nb7N7gj4eMgiQikkqGC7WrE
         - https://api.atlassian.com
         - https://one-atlas-onki.atlassian.net
 

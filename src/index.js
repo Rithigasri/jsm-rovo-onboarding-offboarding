@@ -83,68 +83,83 @@ const checkEmployeeExists = async (userId) => {
 export async function addEmployee(payload) {
   console.log("Payload received:", payload);
 
-  if (payload.userId && payload.username) {
-    // Check if the employee already exists using AQL
-    const employeeExists = await checkEmployeeExists(payload.userId);
+  const { userId, username, email, phoneNumber, department } = payload;
 
-    if (employeeExists) {
-      console.log(`❌ Employee already exists: ${payload.username} (ID: ${payload.userId}).`);
-      return {
-        status: "error",
-        message: `Employee already exists: ${payload.username} (ID: ${payload.userId}).`,
-      };
-    }
-
-    console.log(`Adding new employee: ${payload.userId}, ${payload.username}`);
-    const data = {
-      objectTypeId: "166",
-      attributes: [
-        {
-          objectTypeAttributeId: "1552",
-          objectAttributeValues: [{ value: payload.username }],
-        },
-        {
-          objectTypeAttributeId: "1561",
-          objectAttributeValues: [{ value: payload.userId }],
-        },
-      ],
-    };
-
-    try {
-      console.log("🔄 Sending request to create object...");
-      const response = await fetch(`${BASE_URL}/object/create`, {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify(data),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log("✅ Employee added successfully:", result);
-
-        return {
-          status: "success",
-          message: "Employee added successfully.",
-        };
-      } else {
-        console.error("❌ Failed to add employee:", response.status, await response.text());
-        return {
-          status: "error",
-          message: "Failed to add employee.",
-        };
-      }
-    } catch (error) {
-      console.error("❌ Error while adding employee:", error);
-      return {
-        status: "error",
-        message: "An error occurred while adding the employee.",
-      };
-    }
-  } else {
-    console.error("❌ Invalid payload. Ensure userId and username are provided.");
+  // Validate all required fields
+  if (!userId || !username || !email || !phoneNumber || !department) {
+    console.error("❌ Invalid payload. Ensure userId, username, email, phoneNumber, and department are provided.");
     return {
       status: "error",
-      message: "Invalid payload. Ensure userId and username are provided.",
+      message: "Invalid payload. Ensure userId, username, email, phoneNumber, and department are provided.",
+    };
+  }
+
+  // Check if the employee already exists using AQL
+  const employeeExists = await checkEmployeeExists(userId);
+
+  if (employeeExists) {
+    console.log(`❌ Employee already exists: ${username} (ID: ${userId}).`);
+    return {
+      status: "error",
+      message: `Employee already exists: ${username} (ID: ${userId}).`,
+    };
+  }
+
+  console.log(`Adding new employee: ${userId}, ${username}, ${email}, ${phoneNumber}, ${department}`);
+  const data = {
+    objectTypeId: "166",
+    attributes: [
+      {
+        objectTypeAttributeId: "1552", // Attribute ID for username
+        objectAttributeValues: [{ value: username }],
+      },
+      {
+        objectTypeAttributeId: "1561", // Attribute ID for userId
+        objectAttributeValues: [{ value: userId }],
+      },
+      {
+        objectTypeAttributeId: "1573", // Attribute ID for email
+        objectAttributeValues: [{ value: email }],
+      },
+      {
+        objectTypeAttributeId: "1574", // Attribute ID for phoneNumber
+        objectAttributeValues: [{ value: phoneNumber }],
+      },
+      {
+        objectTypeAttributeId: "1575", // Attribute ID for department
+        objectAttributeValues: [{ value: department }],
+      },
+    ],
+  };
+
+  try {
+    console.log("🔄 Sending request to create object...");
+    const response = await fetch(`${BASE_URL}/object/create`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log("✅ Employee added successfully:", result);
+
+      return {
+        status: "success",
+        message: "Employee added successfully.",
+      };
+    } else {
+      console.error("❌ Failed to add employee:", response.status, await response.text());
+      return {
+        status: "error",
+        message: "Failed to add employee.",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Error while adding employee:", error);
+    return {
+      status: "error",
+      message: "An error occurred while adding the employee.",
     };
   }
 }
@@ -345,172 +360,157 @@ export async function syncToConfluence() {
 export async function assignAsset(payload) {
   console.log("Payload received for assignAsset:", payload);
 
-  if (payload.objectKey && payload.employeeId) {
-    const objectKey = payload.objectKey;
-    const employeeId = payload.employeeId;
+  const { assetId, employeeId } = payload;
 
-    console.log(`Processing asset assignment: Object Key - ${objectKey}, Employee ID - ${employeeId}`);
-
-    // Function to fetch the employee's objectKey using AQL
-    const getEmployeeObjectKey = async (employeeId) => {
-      const url = `${BASE_URL}/object/aql?startAt=0&maxResults=1&includeAttributes=true`;
-      const payload = {
-        qlQuery: `objectType = "People" AND Employee_id = "${employeeId}"`, // Correct AQL query
-      };
-
-      try {
-        console.log(`🔍 Fetching employee objectKey for ID: ${employeeId} using AQL...`);
-        const response = await fetch(url, {
-          method: "POST",
-          headers: getHeaders(),
-          body: JSON.stringify(payload),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.total === 1) {
-            const objectKey = data.values[0]?.objectKey;
-            console.log(`✅ Employee found. ObjectKey: ${objectKey}`);
-            return objectKey;
-          } else {
-            console.log(`❌ Employee with ID ${employeeId} not found.`);
-            return null;
-          }
-        } else {
-          console.error("❌ Failed to fetch employee objectKey:", response.status, await response.text());
-          return null;
-        }
-      } catch (error) {
-        console.error("❌ Error while fetching employee objectKey:", error);
-        return null;
-      }
-    };
-
-    // Function to fetch the current value of the "Owner" attribute
-    const fetchOwnerAttribute = async (objectKey) => {
-      const objectId = objectKey.split("-")[1];
-      const url = `${BASE_URL}/object/${objectId}/attributes`;
-
-      try {
-        console.log(`Fetching attributes for object ${objectKey} (ID: ${objectId})...`);
-        const response = await fetch(url, {
-          method: "GET",
-          headers: getHeaders(),
-        });
-
-        if (response.ok) {
-          const attributes = await response.json();
-
-          // Locate the "Owner" attribute by its attribute id (1572)
-          const ownerAttribute = attributes.find(
-            (attr) => attr.objectTypeAttributeId === "1572"
-          );
-
-          // Check if the attribute exists and has a referencedObject
-          if (
-            ownerAttribute &&
-            ownerAttribute.objectAttributeValues.length > 0 &&
-            ownerAttribute.objectAttributeValues[0].referencedObject
-          ) {
-            const label = ownerAttribute.objectAttributeValues[0].referencedObject.label;
-            console.log(`Fetched "Owner" attribute label: ${label}`);
-            return label;
-          }
-
-          console.log(`"Owner" attribute is empty or not set.`);
-          return null; // Return null if the attribute is empty or not set
-        } else {
-          console.error("❌ Failed to fetch attributes:", response.status, await response.text());
-          return null;
-        }
-      } catch (error) {
-        console.error("❌ Error while fetching attributes:", error);
-        return null;
-      }
-    };
-
-    // Function to update the "Owner" attribute with the employee's objectKey
-    const updateOwner = async (objectKey, employeeObjectKey) => {
-      const objectId = objectKey.split("-")[1];
-      const url = `${BASE_URL}/object/${objectId}`;
-      const payloadData = {
-        attributes: [
-          {
-            objectTypeAttributeId: "1572", // Attribute ID for "Owner"
-            objectAttributeValues: [
-              {
-                value: employeeObjectKey, // Employee objectKey to assign
-              },
-            ],
-          },
-        ],
-      };
-
-      try {
-        console.log(`Updating object ${objectKey} with owner objectKey ${employeeObjectKey}...`);
-        const response = await fetch(url, {
-          method: "PUT",
-          headers: getHeaders(),
-          body: JSON.stringify(payloadData),
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          console.log("✅ Update successful:", result);
-          return {
-            status: "success",
-            message: `Asset successfully assigned to Owner: ${employeeObjectKey}`,
-          };
-        } else {
-          console.error("❌ Update failed:", response.status, await response.text());
-          return {
-            status: "error",
-            message: "Failed to assign asset.",
-          };
-        }
-      } catch (error) {
-        console.error("❌ Error during update:", error);
-        return {
-          status: "error",
-          message: "An error occurred while assigning the asset.",
-        };
-      }
-    };
-
-    // Fetch the employee's objectKey using AQL
-    const employeeObjectKey = await getEmployeeObjectKey(employeeId);
-    if (!employeeObjectKey) {
-      return {
-        status: "error",
-        message: `Employee with ID ${employeeId} does not exist. Please add the employee to the system before assigning the asset.`,
-      };
-    }
-
-    // Fetch the current "Owner" attribute value
-    const currentValue = await fetchOwnerAttribute(objectKey);
-
-    // Debug logging of the fetched value.
-    console.log(`Debug: Fetched "Owner" attribute value: ${currentValue}`);
-
-    // Check if the attribute is either null (the actual null value) or the string "null"
-    if (currentValue === null || currentValue === "null") {
-      console.log(`"Owner" is ${currentValue}. Proceeding with update...`);
-      const result = await updateOwner(objectKey, employeeObjectKey);
-      return result;
-    } else {
-      console.log(`❌ Asset is already assigned to: ${currentValue}. No update performed.`);
-      return {
-        status: "error",
-        message: `Asset is already assigned to: ${currentValue}.`,
-      };
-    }
-  } else {
-    console.error("❌ Missing required fields in payload. Ensure both objectKey and employeeId are provided.");
+  if (!assetId || !employeeId) {
+    console.error("❌ Missing required fields in payload. Ensure both assetId and employeeId are provided.");
     return {
       status: "error",
-      message: "Missing required fields. Ensure both objectKey and employeeId are provided.",
+      message: "Missing required fields. Ensure both assetId and employeeId are provided.",
     };
   }
+
+  console.log(`Processing asset assignment: Asset ID - ${assetId}, Employee ID - ${employeeId}`);
+
+  // Function to fetch the objectKey for an asset using its assetId
+  const getAssetObjectKey = async (assetId) => {
+    const url = `${BASE_URL}/object/aql?startAt=0&maxResults=1&includeAttributes=true`;
+    const payload = {
+      qlQuery: `objectType = "Asset" AND Asset_id = "${assetId}"`, // Correct AQL query
+    };
+
+    try {
+      console.log(`🔍 Fetching asset objectKey for Asset ID: ${assetId} using AQL...`);
+      const response = await fetch(url, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.total === 1) {
+          const objectKey = data.values[0]?.objectKey;
+          console.log(`✅ Asset found. ObjectKey: ${objectKey}`);
+          return objectKey;
+        } else {
+          console.log(`❌ Asset with ID ${assetId} not found.`);
+          return null;
+        }
+      } else {
+        console.error("❌ Failed to fetch asset objectKey:", response.status, await response.text());
+        return null;
+      }
+    } catch (error) {
+      console.error("❌ Error while fetching asset objectKey:", error);
+      return null;
+    }
+  };
+
+  // Function to fetch the objectKey for an employee using their employeeId
+  const getEmployeeObjectKey = async (employeeId) => {
+    const url = `${BASE_URL}/object/aql?startAt=0&maxResults=1&includeAttributes=true`;
+    const payload = {
+      qlQuery: `objectType = "People" AND Employee_id = "${employeeId}"`, // Correct AQL query
+    };
+
+    try {
+      console.log(`🔍 Fetching employee objectKey for Employee ID: ${employeeId} using AQL...`);
+      const response = await fetch(url, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.total === 1) {
+          const objectKey = data.values[0]?.objectKey;
+          console.log(`✅ Employee found. ObjectKey: ${objectKey}`);
+          return objectKey;
+        } else {
+          console.log(`❌ Employee with ID ${employeeId} not found.`);
+          return null;
+        }
+      } else {
+        console.error("❌ Failed to fetch employee objectKey:", response.status, await response.text());
+        return null;
+      }
+    } catch (error) {
+      console.error("❌ Error while fetching employee objectKey:", error);
+      return null;
+    }
+  };
+
+  // Function to update the "Owner" attribute with the employee's objectKey
+  const updateOwner = async (assetObjectKey, employeeObjectKey) => {
+    const objectId = assetObjectKey.split("-")[1];
+    const url = `${BASE_URL}/object/${objectId}`;
+    const payloadData = {
+      attributes: [
+        {
+          objectTypeAttributeId: "1572", // Attribute ID for "Owner"
+          objectAttributeValues: [
+            {
+              value: employeeObjectKey, // Employee objectKey to assign
+            },
+          ],
+        },
+      ],
+    };
+
+    try {
+      console.log(`Updating asset ${assetObjectKey} with owner objectKey ${employeeObjectKey}...`);
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: getHeaders(),
+        body: JSON.stringify(payloadData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("✅ Update successful:", result);
+        return {
+          status: "success",
+          message: `Asset successfully assigned to Owner: ${employeeObjectKey}`,
+        };
+      } else {
+        console.error("❌ Update failed:", response.status, await response.text());
+        return {
+          status: "error",
+          message: "Failed to assign asset.",
+        };
+      }
+    } catch (error) {
+      console.error("❌ Error during update:", error);
+      return {
+        status: "error",
+        message: "An error occurred while assigning the asset.",
+      };
+    }
+  };
+
+  // Fetch the objectKey for the asset using its assetId
+  const assetObjectKey = await getAssetObjectKey(assetId);
+  if (!assetObjectKey) {
+    return {
+      status: "error",
+      message: `Asset with ID ${assetId} does not exist. Please add the asset to the system before assigning it.`,
+    };
+  }
+
+  // Fetch the objectKey for the employee using their employeeId
+  const employeeObjectKey = await getEmployeeObjectKey(employeeId);
+  if (!employeeObjectKey) {
+    return {
+      status: "error",
+      message: `Employee with ID ${employeeId} does not exist. Please add the employee to the system before assigning the asset.`,
+    };
+  }
+
+  // Update the "Owner" attribute to assign the asset to the employee
+  const result = await updateOwner(assetObjectKey, employeeObjectKey);
+  return result;
 }
 
 export async function deallocateAsset(payload) {
